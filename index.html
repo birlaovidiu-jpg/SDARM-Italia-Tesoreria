@@ -685,6 +685,11 @@ tr.voided td{opacity:.5;text-decoration:line-through}
   padding:14px 16px;background:#fff;border-bottom:1px solid var(--line)
 }
 .sheet-head h2{font-size:17px}
+/* barra della ricevuta: verde acceso in entrata, rosso acceso in uscita */
+#mReceipt .sheet-head.rec-in{background:#00d44a;border-bottom-color:#00d44a}
+#mReceipt .sheet-head.rec-out{background:#ff1a2d;border-bottom-color:#ff1a2d}
+#mReceipt .sheet-head.rec-in h2,#mReceipt .sheet-head.rec-out h2,#mReceipt .sheet-head.rec-in small,#mReceipt .sheet-head.rec-out small{color:#fff}
+#mReceipt .sheet-head.rec-in .btn,#mReceipt .sheet-head.rec-out .btn{background:#fff;color:#111;border-color:#fff}
 .sheet-head small{display:block;color:var(--muted);font-size:11.5px;font-weight:500}
 .sheet-body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:15px;min-height:0}
 /* la riga in cui si scrive la ricerca: sempre in cima, sempre visibile */
@@ -2468,7 +2473,7 @@ const DEFAULTS={
 /* Il numero di versione serve a una cosa sola ma importante: capire in due
    secondi se il file aperto è l'ultimo o è quello vecchio rimasto nella
    memoria del browser. Va cambiato a ogni modifica del programma. */
-const VERSIONE='4.4', VERSIONE_DATA='25 ottobre 2026';
+const VERSIONE='4.5', VERSIONE_DATA='17 novembre 2026';
 let state=load(), draft=null, viewId=null, pendingSend=null;
 /* aperta mentre una ricevuta si sta registrando: impedisce il doppio tocco */
 let salvataggioInCorso=false;
@@ -3751,6 +3756,7 @@ async function ricevuteListaCondividi(){
 function openReceipt(type,editId){
   const editing=state.receipts.find(r=>r.id===editId);
   draft={type:editing?editing.type:type,id:editing?editing.id:null,attachments:editing?[...(editing.attachments||[])]:[]};
+  $('mReceipt').querySelector('.sheet-head').className='sheet-head '+(draft.type==='Entrata'?'rec-in':'rec-out');
   $('mrTitle').textContent=editing?`Modifica ricevuta ${editing.number}`:`Nuova ricevuta in ${draft.type.toLowerCase()}`;
   $('mrSub').textContent='Scegli cassa e deposito per ogni riga';
   $('mrSave').textContent=editing?'Salva modifiche':'Conferma ricevuta';
@@ -4076,12 +4082,15 @@ function apriScanner(){
   scanCamera();
 }
 function scanChiudi(){
-  scanOcchioFerma(); scanSpegniCamera();
+  scanOcchioFerma(); scanPausaCamera();
   scanFoto=null; scanQuad=null; scanPagine=[]; scanPreso=-1;
   $('scanPagine').innerHTML='';
   $('scanEsito').removeAttribute('src');
   closeModal('mScan');
 }
+/* chiudendo la finestra la fotocamera resta aperta ma in pausa: cosi' il
+   permesso di iOS si chiede una volta sola e non a ogni scansione */
+function scanPausaCamera(){ try{ const v=$('scanVideo'); v&&v.pause() }catch(e){} }
 function scanSpegniCamera(){
   try{ scanStream&&scanStream.getTracks().forEach(t=>t.stop()) }catch(e){}
   scanStream=null;
@@ -4115,7 +4124,8 @@ function scanFase(f){
 async function scanCamera(){
   scanFase('camera');
   const v=$('scanVideo');
-  if(scanStream){ try{ await v.play() }catch(e){} return scanOcchioAvvia() }
+  if(scanStream&&!scanStream.getTracks().some(t=>t.readyState==='live')) scanStream=null;
+  if(scanStream){ if(v.srcObject!==scanStream) v.srcObject=scanStream; try{ await v.play() }catch(e){} return scanOcchioAvvia() }
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)
     return scanSenzaCamera('Questo dispositivo non lascia aprire la fotocamera da dentro il programma.');
   try{
